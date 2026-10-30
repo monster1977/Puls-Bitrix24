@@ -1,0 +1,6 @@
+<!-- Android 13 uses the resource in mipmap-anydpi-v33 with a monochrome layer. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools" tools:ignore="MonochromeLauncherIcon">
+    <background android:drawable="@color/brand_graphite" />
+    <foreground android:drawable="@drawable/grf_icon_foreground" />
+</adaptive-icon>

@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' }
+if (System.getenv('B24_BUILD_DIR')) { buildDir = file(System.getenv('B24_BUILD_DIR')) }
+
+android {
+    namespace 'ru.local.bitrixtasks'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'ru.local.bitrixtasks'
+        minSdk 24
+        targetSdk 34
+        versionCode 12
+        versionName '2.1'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    signingConfigs {
+        debug {
+            if (System.getenv('B24_DEBUG_KEYSTORE')) {
+                storeFile file(System.getenv('B24_DEBUG_KEYSTORE'))
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+    lint { abortOnError true }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            // Keep Robolectric's download lock and cache inside this project.
+            systemProperty 'user.home', file("${buildDir}/test-home").absolutePath
+            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+            doFirst { file("${buildDir}/test-home").mkdirs() }
+        }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    testImplementation 'org.robolectric:robolectric:4.12.2'
+}

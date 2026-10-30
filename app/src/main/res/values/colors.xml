@@ -1,0 +1,14 @@
+<resources>
+    <!-- Primary brand colors sampled from the rendered grf.pro website. -->
+    <color name="brand_green">#2E8941</color>
+    <color name="brand_graphite">#333333</color>
+    <color name="brand_white">#FFFFFF</color>
+    <!-- Darker green keeps small button labels and status text readable. -->
+    <color name="brand_action">#2B803D</color>
+    <color name="brand_text">#236B33</color>
+    <color name="screen_background">#F5F6F5</color>
+    <color name="text_primary">#222222</color>
+    <color name="text_secondary">#666666</color>
+    <color name="surface_tint">#EAF3EB</color>
+    <color name="surface_line">#DEE5DF</color>
+</resources>
