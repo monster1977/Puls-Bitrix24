@@ -62,6 +62,13 @@ final class BitrixApi {
         JSONArray result=response.optJSONArray("result");
         return result==null?new JSONArray():result;
     }
+    /** Marks a checklist item complete or reopens it, then reloads the task with its fresh checklist. */
+    Task setChecklistItemState(long taskId, long itemId, boolean complete) throws Exception {
+        JSONObject response=transport.call(complete?"task.checklistitem.complete":"task.checklistitem.renew",
+                new JSONObject().put("TASKID",taskId).put("ITEMID",itemId));
+        if(!response.optBoolean("result")) throw new ApiException("Портал не принял изменение чек-листа. Обновите задачу и повторите.");
+        return getTask(taskId);
+    }
     Task updateDeadline(long id, String deadline) throws Exception {
         if (!deadline.isEmpty()) java.time.OffsetDateTime.parse(deadline);
         // An explicit empty value clears the deadline; never send other task fields.

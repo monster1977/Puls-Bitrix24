@@ -56,6 +56,28 @@ public class ScreenTest {
             assertNotNull(find(activity,"Укажите название задачи."));
         }
     }
+    @Test public void demoChecklistItemsToggleInTaskDetail() {
+        try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+            MainActivity activity=controller.get();
+            click(activity,"Посмотреть демоверсию");
+            ((View)find(activity,"Согласовать план проекта").getParent()).performClick();
+            MainActivity.Model model=(MainActivity.Model)activity.onRetainNonConfigurationInstance();
+            assertEquals(3,model.selected.checklist.size());
+            assertNotNull(find(activity,"✓  Согласовать смету с заказчиком"));
+            click(activity,"✓  Согласовать смету с заказчиком");
+            assertNotNull(find(activity,"Отметка снята в деморежиме"));
+            assertNotNull(find(activity,"○  Согласовать смету с заказчиком"));
+            click(activity,"○  Утвердить этапы работ");
+            assertNotNull(find(activity,"Пункт чек-листа выполнен в деморежиме"));
+            assertTrue(model.selected.checklist.get(1).complete);
+            assertFalse(model.selected.checklist.get(0).complete);
+            click(activity,"←  К списку");
+            ((View)find(activity,"Согласовать план проекта").getParent()).performClick();
+            assertTrue(model.selected.checklist.get(1).complete);
+            assertFalse(model.selected.checklist.get(0).complete);
+            assertNotNull(find(activity,"✓  Утвердить этапы работ"));
+        }
+    }
     @Test public void settingsSaveDefaultDeadlineInDemo() {
         try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
             MainActivity activity=controller.get(); click(activity,"Посмотреть демоверсию"); click(activity,"☰");

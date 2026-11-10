@@ -127,6 +127,44 @@ public class ClientTest {
         assertEquals(1,t.checklist.size()); assertEquals("Проверить",t.checklist.get(0).title);
         assertTrue(t.checklist.get(0).complete);
     }
+    @Test public void checklistToggleUsesCompleteAndRenewEndpoints() throws Exception {
+        java.util.List<String> methods=new java.util.ArrayList<>();
+        Task done=new BitrixApi((method,p)->{
+            methods.add(method);
+            if(method.equals("task.checklistitem.complete")) { assertEquals(8952,p.getLong("TASKID")); assertEquals(4134,p.getLong("ITEMID")); return new JSONObject().put("result",true); }
+            if(method.equals("tasks.task.get")) return new JSONObject().put("result",new JSONObject().put("task",task(8952,2)));
+            assertEquals("task.checklistitem.getlist",method);
+            return new JSONObject().put("result",new JSONArray().put(new JSONObject().put("ID","4134").put("TITLE","Подать декларацию").put("IS_COMPLETE","Y")));
+        }).setChecklistItemState(8952,4134,true);
+        assertEquals(java.util.List.of("task.checklistitem.complete","tasks.task.get","task.checklistitem.getlist"),methods);
+        assertEquals(1,done.checklist.size()); assertEquals(4134,done.checklist.get(0).id);
+        assertTrue(done.checklist.get(0).complete);
+        Task reopened=new BitrixApi((method,p)->{
+            if(method.equals("task.checklistitem.renew")) { assertEquals(8952,p.getLong("TASKID")); assertEquals(4134,p.getLong("ITEMID")); return new JSONObject().put("result",true); }
+            if(method.equals("tasks.task.get")) return new JSONObject().put("result",new JSONObject().put("task",task(8952,2)));
+            assertEquals("task.checklistitem.getlist",method);
+            return new JSONObject().put("result",new JSONArray().put(new JSONObject().put("ID","4134").put("TITLE","Подать декларацию").put("IS_COMPLETE","N")));
+        }).setChecklistItemState(8952,4134,false);
+        assertFalse(reopened.checklist.get(0).complete);
+    }
+    @Test public void checklistToggleRejectsPortalNegativeResult() throws Exception {
+        try {
+            new BitrixApi((method,p)->new JSONObject().put("result",false)).setChecklistItemState(4,9,true);
+            fail("Portal rejection ignored");
+        }catch(BitrixApi.ApiException expected) {}
+    }
+    @Test public void checklistItemIdsSurviveToggleAndLocalCacheRoundTrip() throws Exception {
+        Task t=new Task(task(4,2).put("checklist",new JSONArray()
+                .put(new JSONObject().put("ID","4133").put("TITLE","Подать декларацию").put("IS_COMPLETE","N"))
+                .put(new JSONObject().put("ID","4134").put("TITLE","Уплатить НДФЛ").put("IS_COMPLETE","Y"))));
+        assertEquals(4133,t.checklist.get(0).id); assertEquals(4134,t.checklist.get(1).id);
+        Task flipped=t.withChecklistToggle(t.checklist.get(0));
+        assertTrue(flipped.checklist.get(0).complete); assertFalse(t.checklist.get(0).complete);
+        assertTrue(flipped.checklist.get(1).complete); assertEquals(4133,flipped.checklist.get(0).id);
+        Task cached=new Task(t.toJson());
+        assertEquals(4133,cached.checklist.get(0).id); assertFalse(cached.checklist.get(0).complete);
+        assertTrue(cached.checklist.get(1).complete);
+    }
     @Test public void clearingDeadlineSendsExplicitEmptyField() throws Exception {
         Task updated=new BitrixApi((method,p)->{
             assertEquals("",p.getJSONObject("fields").getString("DEADLINE"));

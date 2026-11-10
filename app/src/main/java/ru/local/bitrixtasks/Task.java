@@ -29,7 +29,7 @@ final class Task {
     private static List<ChecklistItem> readChecklist(JSONObject j) {
         ArrayList<ChecklistItem> out=new ArrayList<>(); JSONArray a=j.optJSONArray("checklist"); if(a==null)a=j.optJSONArray("checkLists");
         if(a==null)return out;
-        for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item!=null){String title=item.optString("title",item.optString("TITLE",""));if(!title.isEmpty())out.add(new ChecklistItem(title,completed(item)));}}
+        for(int i=0;i<a.length();i++){JSONObject item=a.optJSONObject(i);if(item!=null){String title=item.optString("title",item.optString("TITLE",""));if(!title.isEmpty())out.add(new ChecklistItem(item.optLong("ID",item.optLong("id",0)),title,completed(item)));}}
         return out;
     }
     private static boolean completed(JSONObject item) {
@@ -39,9 +39,17 @@ final class Task {
         if(value instanceof Number) return ((Number)value).intValue()!=0;
         return "Y".equalsIgnoreCase(String.valueOf(value));
     }
-    static final class ChecklistItem { final String title; final boolean complete; ChecklistItem(String t,boolean c){title=t;complete=c;} }
+    static final class ChecklistItem { final long id; final String title; final boolean complete; ChecklistItem(long i,String t,boolean c){id=i;title=t;complete=c;} }
+    /** Returns a copy of this task with one checklist item flipped to the opposite state. */
+    Task withChecklistToggle(ChecklistItem item) {
+        try {
+            JSONArray items=new JSONArray();
+            for(ChecklistItem c:checklist)items.put(new JSONObject().put("id",c.id).put("title",c.title).put("isComplete",c==item||(item.id>0&&c.id==item.id)?!c.complete:c.complete));
+            return new Task(toJson().put("checklist",items));
+        } catch(Exception e) { return this; }
+    }
     JSONObject toJson() {
-        try { JSONArray items=new JSONArray();for(ChecklistItem item:checklist)items.put(new JSONObject().put("title",item.title).put("isComplete",item.complete)); return new JSONObject().put("id",id).put("title",title).put("description",description).put("responsibleId",responsibleId).put("status",status).put("deadline",deadline).put("priority",highPriority?2:1).put("responsible",new JSONObject().put("name",responsibleName)).put("checklist",items); }
+        try { JSONArray items=new JSONArray();for(ChecklistItem item:checklist)items.put(new JSONObject().put("id",item.id).put("title",item.title).put("isComplete",item.complete)); return new JSONObject().put("id",id).put("title",title).put("description",description).put("responsibleId",responsibleId).put("status",status).put("deadline",deadline).put("priority",highPriority?2:1).put("responsible",new JSONObject().put("name",responsibleName)).put("checklist",items); }
         catch(Exception e) { return new JSONObject(); }
     }
     boolean overdue() {

@@ -11,6 +11,7 @@ import android.text.method.PasswordTransformationMethod;
 import android.view.*;
 import android.view.inputmethod.EditorInfo;
 import android.widget.*;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -233,6 +234,7 @@ public final class MainActivity extends Activity {
             else if(p.type.equals("COMPLETE")) local.upsert(api.complete(target));
             else if(p.type.equals("DEADLINE")) local.upsert(api.updateDeadline(target,p.payload.optString("deadline")));
             else if(p.type.equals("TITLE")) local.upsert(api.updateTitle(target,p.payload.optString("title")));
+            else if(p.type.equals("CHECKLIST")) local.upsert(api.setChecklistItemState(target,p.payload.optLong("itemId"),p.payload.optBoolean("complete")));
             local.removePending(p.id);
         }
     }
@@ -250,9 +252,17 @@ public final class MainActivity extends Activity {
         }),22);
         add(text("ОПИСАНИЕ",11,MUTED,true),8); TextView desc=text(t.description.isEmpty()?"Описание не добавлено":t.description,16,INK,false); desc.setTextIsSelectable(true); add(desc,26);
         if(!t.checklist.isEmpty()) {
-            add(text("ЧЕК-ЛИСТ",11,MUTED,true),8);
+            add(text("ЧЕК-ЛИСТ",11,MUTED,true),4);
+            add(text("Нажмите на пункт, чтобы отметить его выполненным или снять отметку",12,MUTED,false),8);
             LinearLayout list=column(); list.setPadding(dp(14),dp(12),dp(14),dp(10)); list.setBackground(round(TINT,14));
-            for(Task.ChecklistItem item:t.checklist) { TextView itemView=text((item.complete?"✓  ":"○  ")+item.title,14,item.complete?GREEN:INK,false); itemView.setPadding(0,0,0,dp(8)); list.addView(itemView); }
+            for(Task.ChecklistItem item:t.checklist) {
+                TextView itemView=text((item.complete?"✓  ":"○  ")+item.title,14,item.complete?GREEN:INK,false);
+                itemView.setPadding(0,dp(6),0,dp(6)); itemView.setMinHeight(dp(40));
+                itemView.setContentDescription((item.complete?"Снять отметку: ":"Отметить: ")+item.title);
+                final Task taskRef=t; final Task.ChecklistItem itemRef=item;
+                itemView.setOnClickListener(v->{ if(m.busy)return; toggleChecklist(taskRef,itemRef); });
+                list.addView(itemView);
+            }
             add(list,18);
         }
         if(t.canComplete) add(button("✓  Завершить задачу",true,()->new AlertDialog.Builder(this).setTitle("Завершить задачу?").setMessage(t.title)
@@ -279,6 +289,17 @@ public final class MainActivity extends Activity {
             try { Task done=demoTask(task.id,task.title,task.description,5,task.responsibleId,task.deadline,task.highPriority); replace(done); m.selected=done; m.notice="Задача завершена в деморежиме"; render(); } catch(Exception ignored) {} return;
         }
         m.run(()->{ try { return m.api.complete(task.id); } catch(Exception offline) { if(offline instanceof BitrixApi.ApiException) throw offline; Task done=demoTask(task.id,task.title,task.description,5,task.responsibleId,task.deadline,task.highPriority); local.upsert(done); local.enqueue("COMPLETE",task.id,new JSONObject()); return done; } },done->{ replace(done); m.selected=done; m.notice=done.id<0?"Задача завершена локально; синхронизация ожидает вебхук":(done.status==5?"Задача завершена":"Новый статус: "+done.statusLabel()); });
+    }
+    private void toggleChecklist(Task task,Task.ChecklistItem item) {
+        final boolean checked=!item.complete;
+        if(m.demo) { Task changed=task.withChecklistToggle(item); replace(changed); m.selected=changed; m.notice=checked?"Пункт чек-листа выполнен в деморежиме":"Отметка снята в деморежиме"; render(); return; }
+        final boolean[] queued=new boolean[1];
+        m.run(()->{ try { return m.api.setChecklistItemState(task.id,item.id,checked); } catch(Exception offline) {
+            if(offline instanceof BitrixApi.ApiException) throw offline;
+            Task changed=task.withChecklistToggle(item); local.upsert(changed);
+            if(item.id>0) { local.enqueue("CHECKLIST",task.id,new JSONObject().put("itemId",item.id).put("complete",checked).put("title",item.title)); queued[0]=true; }
+            return changed; } },
+        updated->{ replace(updated); m.selected=updated; m.notice=queued[0]||updated.id<0?"Чек-лист сохранён локально; синхронизация ожидает вебхук":"Чек-лист обновлён в Bitrix24"; });
     }
     private void closeDeadlineEditor() {
         m.screen="detail"; m.editedDeadline=""; m.error=""; render();
@@ -448,15 +469,24 @@ public final class MainActivity extends Activity {
     private void startDemo() {
         m.demo=true;m.mine=true;m.tab=0;m.query="";m.screen="tasks";m.error="";m.notice="";m.demoTasks.clear();
         try {
-            m.demoTasks.add(demoTask(104,"Согласовать план проекта","Обсудить этапы с командой и зафиксировать сроки запуска.",3,1,ZonedDateTime.now().plusHours(3).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),true));
-            m.demoTasks.add(demoTask(103,"Подготовить предложение клиенту","Собрать требования, оценить объём работ и подготовить предложение.",2,1,ZonedDateTime.now().plusDays(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),false));
-            m.demoTasks.add(demoTask(102,"Обновить материалы встречи","Добавить итоги обсуждения и следующие шаги.",2,1,ZonedDateTime.now().minusDays(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),false));
-            m.demoTasks.add(demoTask(101,"Проверить макеты","Проверить тексты и состояния экранов.",2,2,"",false));
-            m.demoTasks.add(demoTask(100,"Отправить итоги недели","Отправлено команде.",5,1,"",false));
+            m.demoTasks.add(demoTask(104,"Согласовать план проекта","Обсудить этапы с командой и зафиксировать сроки запуска.",3,1,ZonedDateTime.now().plusHours(3).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),true,new String[]{"Согласовать смету с заказчиком","Утвердить этапы работ","Назначить ответственных за дизайн"}));
+            m.demoTasks.add(demoTask(103,"Подготовить предложение клиенту","Собрать требования, оценить объём работ и подготовить предложение.",2,1,ZonedDateTime.now().plusDays(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),false,new String[]{"Собрать требования заказчика","Оценить объём работ"}));
+            m.demoTasks.add(demoTask(102,"Обновить материалы встречи","Добавить итоги обсуждения и следующие шаги.",2,1,ZonedDateTime.now().minusDays(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),false,null));
+            m.demoTasks.add(demoTask(101,"Проверить макеты","Проверить тексты и состояния экранов.",2,2,"",false,new String[]{"Проверить тексты","Проверить состояния экранов"}));
+            m.demoTasks.add(demoTask(100,"Отправить итоги недели","Отправлено команде.",5,1,"",false,null));
         }catch(Exception ignored){} load(false);
     }
     private Task demoTask(long id,String title,String desc,int status,long user,String deadline,boolean priority)throws Exception {
-        return new Task(new JSONObject().put("id",id).put("title",title).put("description",desc).put("status",status).put("responsibleId",user).put("responsible",new JSONObject().put("name",user==1?"Вы":"Коллега #"+user)).put("deadline",deadline).put("priority",priority?2:1));
+        return demoTask(id,title,desc,status,user,deadline,priority,null);
+    }
+    private Task demoTask(long id,String title,String desc,int status,long user,String deadline,boolean priority,String[] checklist)throws Exception {
+        JSONObject json=new JSONObject().put("id",id).put("title",title).put("description",desc).put("status",status).put("responsibleId",user).put("responsible",new JSONObject().put("name",user==1?"Вы":"Коллега #"+user)).put("deadline",deadline).put("priority",priority?2:1);
+        if(checklist!=null) {
+            JSONArray items=new JSONArray();
+            for(int i=0;i<checklist.length;i++)items.put(new JSONObject().put("ID",id*100+i+1).put("TITLE",checklist[i]).put("IS_COMPLETE",id==104&&i==0?"Y":"N"));
+            json.put("checklist",items);
+        }
+        return new Task(json);
     }
     private int dp(float n) {return Math.round(n*getResources().getDisplayMetrics().density);}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
