@@ -3,6 +3,7 @@ package ru.local.bitrixtasks;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
+import android.content.Intent;
 import android.widget.TimePicker;
 import android.os.Looper;
 import android.view.View;
@@ -48,6 +49,18 @@ public class ScreenTest {
             click(activity,"Подключить портал  →");
             assertNotNull(find(activity,"Нужен полный HTTPS-адрес вебхука: https://портал/rest/ID/ключ/"));
         }
+    }
+    @Test public void adbWebhookIntentNeedsDebugBuildAndTrimsValue() {
+        Intent typed=new Intent();
+        typed.putExtra(MainActivity.WEBHOOK_EXTRA,"  https://portal.example/rest/97/secret/  ");
+        assertEquals("https://portal.example/rest/97/secret/", MainActivity.webhookFromIntent(typed, true));
+        assertNull(MainActivity.webhookFromIntent(typed, false));
+        try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+            assertTrue((controller.get().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0);
+        }
+        assertNull(MainActivity.webhookFromIntent(new Intent(), true));
+        Intent viewed=new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://portal.example/rest/97/secret/"));
+        assertEquals("https://portal.example/rest/97/secret/", MainActivity.webhookFromIntent(viewed, true));
     }
     @Test public void emptyTitleDoesNotCreateTask() {
         try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {

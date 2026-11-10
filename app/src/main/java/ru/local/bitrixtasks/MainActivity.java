@@ -2,6 +2,7 @@ package ru.local.bitrixtasks;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -25,6 +26,7 @@ public final class MainActivity extends Activity {
     private SecureStore store;
     private AppSettings settings;
     private LocalStore local;
+    static final String WEBHOOK_EXTRA = "webhook";
     private String connectionInput="";
     private EditText connectionField;
     private EditText settingsWebhookField, settingsDaysField;
@@ -83,7 +85,30 @@ public final class MainActivity extends Activity {
             } catch(Exception e) { m.error="Не удалось прочитать сохранённое подключение. Введите вебхук заново."; }
         }
         m.listener=this::render;
+        applyWebhookIntent(getIntent());
         render();
+    }
+    /**
+     * Connection without typing on the phone (debug builds, e.g. installed over adb):
+     * adb shell am start -n ru.local.bitrixtasks/.MainActivity --es webhook "https://portal/rest/ID/secret/"
+     * Release builds ignore such intents so another application cannot redirect the connection.
+     */
+    static String webhookFromIntent(Intent intent, boolean debugBuild) {
+        if (!debugBuild || intent == null) return null;
+        String value = intent.getStringExtra(WEBHOOK_EXTRA);
+        if (value == null && Intent.ACTION_VIEW.equals(intent.getAction())) value = intent.getDataString();
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+    private void applyWebhookIntent(Intent intent) {
+        if (intent == null || (!intent.hasExtra(WEBHOOK_EXTRA) && !Intent.ACTION_VIEW.equals(intent.getAction()))) return;
+        boolean debuggable=(getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE)!=0;
+        String value = webhookFromIntent(intent, debuggable);
+        if (value != null) { connect(value); return; }
+        m.error = "Запрос на подключение проигнорирован: адрес вебхула через adb принимают только отладочные сборки.";
+    }
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        if (!m.busy) { applyWebhookIntent(intent); render(); }
     }
     @Override protected void onResume() {
         super.onResume();
