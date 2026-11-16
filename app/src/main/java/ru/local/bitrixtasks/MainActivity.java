@@ -68,10 +68,10 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
-        BG=getColor(R.color.screen_background); INK=getColor(R.color.text_primary);
-        MUTED=getColor(R.color.text_secondary); GREEN=getColor(R.color.brand_text);
-        LINE=getColor(R.color.surface_line); ACTION=getColor(R.color.brand_action);
-        GRAPHITE=getColor(R.color.brand_graphite); TINT=getColor(R.color.surface_tint);
+        BG=color(R.color.screen_background); INK=color(R.color.text_primary);
+        MUTED=color(R.color.text_secondary); GREEN=color(R.color.brand_text);
+        LINE=color(R.color.surface_line); ACTION=color(R.color.brand_action);
+        GRAPHITE=color(R.color.brand_graphite); TINT=color(R.color.surface_tint);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store=new SecureStore(getApplicationContext());
         settings=new AppSettings(getApplicationContext());
@@ -225,7 +225,7 @@ public final class MainActivity extends Activity {
         add(button(m.demo ? "Выйти из деморежима" : "Отключить портал",false,this::disconnect),6);
     }
     private void taskCard(Task t) {
-        LinearLayout card=column(); card.setPadding(dp(16),dp(16),dp(16),dp(16)); card.setBackground(round(Color.WHITE,18)); card.setElevation(dp(1));
+        LinearLayout card=column(); card.setPadding(dp(16),dp(16),dp(16),dp(16)); card.setBackground(round(Color.WHITE,18)); if (Build.VERSION.SDK_INT>=21) card.setElevation(dp(1));
         TextView status=text((t.highPriority ? "↑  ВАЖНО  ·  " : "") + t.statusLabel().toUpperCase(new Locale("ru")),11,t.status==5?GREEN:MUTED,true); card.addView(status);
         TextView title=text(t.title,19,INK,true); title.setPadding(0,dp(9),0,dp(12)); card.addView(title);
         card.addView(text((t.overdue()?"Просрочена · ":"") + t.dateLabel(),13,t.overdue()?0xffAC4234:MUTED,false));
@@ -514,6 +514,8 @@ public final class MainActivity extends Activity {
         return new Task(json);
     }
     private int dp(float n) {return Math.round(n*getResources().getDisplayMetrics().density);}
+    @SuppressWarnings("deprecation")
+    private int color(int id) {return Build.VERSION.SDK_INT>=23 ? getColor(id) : getResources().getColor(id);}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private TextView text(String s,int size,int color,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setLineSpacing(dp(2),1);if(bold)v.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));return v;}
