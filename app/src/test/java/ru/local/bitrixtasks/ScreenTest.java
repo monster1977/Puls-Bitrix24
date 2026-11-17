@@ -10,6 +10,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.TextView;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -155,6 +157,87 @@ public class ScreenTest {
             ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick();Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertEquals(original,model.editedDeadline);assertEquals(original,model.selected.deadline);
             activity.onBackPressed();assertEquals("detail",model.screen);
+        }
+    }
+    @Test public void titleEditorEnablesSaveOnlyAfterActualChange() {
+        try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+            MainActivity activity=controller.get();
+            click(activity,"Посмотреть демоверсию");
+            ((View)find(activity,"Согласовать план проекта").getParent()).performClick();
+            click(activity,"Изменить название");
+            assertFalse(find(activity,"Сохранить название").isEnabled());
+            EditText field=(EditText)findHint(activity.getWindow().getDecorView(),"Название");
+            assertNotNull(field);
+            field.setText("   ");
+            assertFalse(find(activity,"Сохранить название").isEnabled());
+            field.setText("Согласовать план проекта заново");
+            assertTrue(find(activity,"Сохранить название").isEnabled());
+            field.setText("Согласовать план проекта");
+            assertFalse(find(activity,"Сохранить название").isEnabled());
+        }
+    }
+    @Test public void titleSaveSendsOnlyTitleFieldAndUpdatesTask() throws Exception {
+        try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+            MainActivity activity=controller.get();
+            click(activity,"Посмотреть демоверсию");
+            ((View)find(activity,"Согласовать план проекта").getParent()).performClick();
+            MainActivity.Model model=(MainActivity.Model)activity.onRetainNonConfigurationInstance();
+            java.util.List<String> calls=new java.util.ArrayList<>();
+            model.demo=false; model.hook=Webhook.parse("https://example.com/rest/1/test/");
+            model.api=new BitrixApi((method,payload)->{
+                JSONObject fields=payload.getJSONObject("fields");
+                calls.add(method+"|"+payload.optLong("taskId")+"|"+fields.optString("TITLE")+"|"+fields.length());
+                return new JSONObject().put("result",new JSONObject().put("task",new JSONObject()
+                        .put("id",payload.optLong("taskId")).put("title",fields.optString("TITLE"))
+                        .put("status",2).put("responsibleId",1).put("priority",1)));
+            });
+            click(activity,"Изменить название");
+            EditText field=(EditText)findHint(activity.getWindow().getDecorView(),"Название");
+            field.setText("Новое название задачи");
+            click(activity,"Сохранить название");
+            for(int i=0;i<100 && model.busy;i++){Thread.sleep(10);Shadows.shadowOf(Looper.getMainLooper()).idle();}
+            assertFalse(model.busy);
+            assertNotNull(find(activity,"Название обновлено в Bitrix24"));
+            assertEquals("Новое название задачи",model.selected.title);
+            assertEquals(1,calls.size());
+            assertEquals("tasks.task.update|104|Новое название задачи|1",calls.get(0));
+            assertEquals("Новое название задачи",model.tasks.get(0).title);
+        }
+    }
+    @Test public void titleSaveQueuesOfflineAndSyncsOnRefresh() throws Exception {
+        try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+            MainActivity activity=controller.get();
+            click(activity,"Посмотреть демоверсию");
+            ((View)find(activity,"Согласовать план проекта").getParent()).performClick();
+            MainActivity.Model model=(MainActivity.Model)activity.onRetainNonConfigurationInstance();
+            java.util.List<String> calls=new java.util.ArrayList<>();
+            java.util.concurrent.atomic.AtomicInteger updates=new java.util.concurrent.atomic.AtomicInteger();
+            model.demo=false; model.hook=Webhook.parse("https://example.com/rest/1/test/");
+            try { java.lang.reflect.Field f=MainActivity.class.getDeclaredField("local"); f.setAccessible(true); ((LocalStore)f.get(activity)).tasks(); } catch(Exception ignored) {} // warm the cache on the main thread so the io thread does not stall on first use
+            model.api=new BitrixApi((method,payload)->{
+                calls.add(method);
+                if(method.equals("tasks.task.update")) {
+                    if(updates.incrementAndGet()==1) throw new java.io.IOException("нет сети");
+                    return new JSONObject().put("result",new JSONObject().put("task",new JSONObject()
+                            .put("id",payload.optLong("taskId")).put("title",payload.getJSONObject("fields").optString("TITLE"))
+                            .put("status",2).put("responsibleId",1).put("priority",1)));
+                }
+                return new JSONObject().put("result",new JSONObject().put("tasks",new JSONArray()));
+            });
+            click(activity,"Изменить название");
+            EditText field=(EditText)findHint(activity.getWindow().getDecorView(),"Название");
+            field.setText("Отложенное название");
+            click(activity,"Сохранить название");
+            for(int i=0;i<100 && model.busy;i++){Thread.sleep(10);Shadows.shadowOf(Looper.getMainLooper()).idle();}
+            assertFalse(model.busy);
+            assertNotNull(find(activity,"Название сохранено локально; синхронизация ожидает вебхук"));
+            assertEquals("Отложенное название",model.selected.title);
+            click(activity,"←  К списку");
+            click(activity,"↻");
+            for(int i=0;i<100 && model.busy;i++){Thread.sleep(10);Shadows.shadowOf(Looper.getMainLooper()).idle();}
+            assertFalse(model.busy);
+            assertEquals(2,updates.get());
+            assertEquals("Отложенное название",model.selected.title);
         }
     }
     private static void chooseDate(MainActivity activity,int year,int month,int day,int hour,int minute) {

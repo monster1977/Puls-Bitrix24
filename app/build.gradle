@@ -8,8 +8,8 @@ android {
         applicationId 'ru.local.bitrixtasks'
         minSdk 19
         targetSdk 34
-        versionCode 15
-        versionName '2.4'
+        versionCode 16
+        versionName '2.5'
         // API below 21 cannot load several dex files on its own; desugaring needs legacy multidex there.
         multiDexEnabled true
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'

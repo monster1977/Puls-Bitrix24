@@ -298,16 +298,23 @@ public final class MainActivity extends Activity {
     private void titleScreen() {
         add(button("←  К задаче",false,()->{m.screen="detail";m.error="";render();}),16);
         add(text("Название задачи",26,INK,true),8); messages();
-        EditText title=input("Название",m.editedTitle,false); title.setFilters(new InputFilter[]{new InputFilter.LengthFilter(255)}); watch(title,v->m.editedTitle=v); add(title,16);
         Button save=button(m.busy?"Сохраняем…":"Сохранить название",true,this::saveTitle);
-        if(m.editedTitle.trim().isEmpty()||m.editedTitle.trim().equals(m.selected.title)){save.setEnabled(false);save.setAlpha(.5f);} add(save,10);
+        // Re-evaluate the save button on every keystroke: without this it stays disabled after typing.
+        EditText title=input("Название",m.editedTitle,false); title.setFilters(new InputFilter[]{new InputFilter.LengthFilter(255)});
+        watch(title,v->{m.editedTitle=v;applyTitleSaveState(save);}); add(title,16);
+        applyTitleSaveState(save); add(save,10);
         add(button("Отмена",false,()->{m.screen="detail";m.error="";render();}),8);
     }
     private void saveTitle() {
         String title=m.editedTitle.trim(); if(title.isEmpty()){m.error="Укажите название задачи.";render();return;} if(title.equals(m.selected.title)||m.busy)return;
         final Task old=m.selected;
         if(m.demo) { try { Task changed=new Task(old.toJson().put("title",title)); replace(changed);m.selected=changed;m.screen="detail";m.notice="Название обновлено в деморежиме";render(); } catch(Exception e){m.error="Не удалось изменить название.";render();} return; }
-        m.run(()->{try{return m.api.updateTitle(old.id,title);}catch(Exception offline){if(offline instanceof BitrixApi.ApiException)throw offline;Task changed=new Task(old.toJson().put("title",title));local.upsert(changed);local.enqueue("TITLE",old.id,new JSONObject().put("title",title));return changed;}},task->{replace(task);m.selected=task;m.screen="detail";m.notice=task.id<0?"Название сохранено локально; синхронизация ожидает вебхук":"Название обновлено в Bitrix24";});
+        final boolean[] queued={false}; // true when the change went to the local queue instead of the portal
+        m.run(()->{try{return m.api.updateTitle(old.id,title);}catch(Exception offline){if(offline instanceof BitrixApi.ApiException)throw offline;queued[0]=true;Task changed=new Task(old.toJson().put("title",title));local.upsert(changed);local.enqueue("TITLE",old.id,new JSONObject().put("title",title));return changed;}},task->{replace(task);m.selected=task;m.screen="detail";m.notice=queued[0]||task.id<0?"Название сохранено локально; синхронизация ожидает вебхук":"Название обновлено в Bitrix24";});
+    }
+    private void applyTitleSaveState(Button save) {
+        boolean changed=!m.editedTitle.trim().isEmpty()&&!m.editedTitle.trim().equals(m.selected.title)&&!m.busy;
+        save.setEnabled(changed); save.setAlpha(changed?1f:.5f);
     }
     private void complete(Task task) {
         if(m.demo) {
