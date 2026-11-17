@@ -121,11 +121,11 @@ public class ScreenTest {
             assertNotNull(find(activity,"Крайний срок обновлён в деморежиме"));
             assertEquals(2030,java.time.OffsetDateTime.parse(model.selected.deadline).getYear());
             assertEquals(15,java.time.OffsetDateTime.parse(model.selected.deadline).getMinute());
-            assertEquals(model.selected.deadline,model.tasks.get(0).deadline);
+            assertEquals(model.selected.deadline,deadlineOf(model,104));
             click(activity,"Изменить крайний срок");click(activity,"Убрать срок");
             assertFalse(model.selected.deadline.isEmpty());
             click(activity,"Сохранить срок");assertEquals("",model.selected.deadline);
-            assertEquals("",model.tasks.get(0).deadline);
+            assertEquals("",deadlineOf(model,104));
             assertNotNull(find(activity,"Крайний срок снят в деморежиме"));
         }
     }
@@ -140,7 +140,7 @@ public class ScreenTest {
             click(activity,"Изменить крайний срок");click(activity,"Убрать срок");click(activity,"Сохранить срок");
             for(int i=0;i<100 && model.busy;i++){Thread.sleep(10);Shadows.shadowOf(Looper.getMainLooper()).idle();}
             assertFalse(model.busy);assertEquals(original,model.selected.deadline);
-            assertEquals(original,model.tasks.get(0).deadline);
+            assertEquals(original,deadlineOf(model,104));
             assertNotNull(find(activity,"Нет права менять срок"));
             assertTrue(find(activity,"Сохранить срок").isEnabled());
         }
@@ -201,7 +201,7 @@ public class ScreenTest {
             assertEquals("Новое название задачи",model.selected.title);
             assertEquals(1,calls.size());
             assertEquals("tasks.task.update|104|Новое название задачи|1",calls.get(0));
-            assertEquals("Новое название задачи",model.tasks.get(0).title);
+            assertEquals("Новое название задачи",titleOf(model,104));
         }
     }
     @Test public void titleSaveQueuesOfflineAndSyncsOnRefresh() throws Exception {
@@ -239,6 +239,38 @@ public class ScreenTest {
             assertEquals(2,updates.get());
             assertEquals("Отложенное название",model.selected.title);
         }
+    }
+    @Test public void demoListOrdersTasksByDeadlineOldestFirst() {
+        try(var controller=Robolectric.buildActivity(MainActivity.class).setup()) {
+            MainActivity activity=controller.get();
+            click(activity,"Посмотреть демоверсию");
+            assertEquals(java.util.List.of("Обновить материалы встречи","Согласовать план проекта","Подготовить предложение клиенту"),cardTitles(activity));
+            click(activity,"＋  Новая задача");
+            EditText title=(EditText)findHint(activity.getWindow().getDecorView(),"Что нужно сделать?");
+            title.setText("Задача без срока");
+            click(activity,"Создать задачу");
+            click(activity,"←  К списку");
+            java.util.List<String> ordered=cardTitles(activity);
+            assertEquals("Задача без срока",ordered.get(ordered.size()-1));
+            assertEquals("Обновить материалы встречи",ordered.get(0));
+        }
+    }
+    private static String deadlineOf(MainActivity.Model model,long id) {
+        for(Task t:model.tasks) if(t.id==id) return t.deadline;
+        throw new AssertionError("Задача #"+id+" не найдена в списке");
+    }
+    private static String titleOf(MainActivity.Model model,long id) {
+        for(Task t:model.tasks) if(t.id==id) return t.title;
+        throw new AssertionError("Задача #"+id+" не найдена в списке");
+    }
+    private static java.util.List<String> cardTitles(MainActivity activity) {
+        java.util.List<String> out=new java.util.ArrayList<>(); collectCards(activity.getWindow().getDecorView(),out); return out;
+    }
+    private static void collectCards(View view,java.util.List<String> out) {
+        Object cd=view.getContentDescription();
+        if(cd!=null) { String s=cd.toString();
+            if(s.contains("Ждёт выполнения")||s.contains("В работе")||s.contains("Завершена")) out.add(s.substring(0,s.indexOf(", "))); }
+        if(view instanceof ViewGroup){ViewGroup g=(ViewGroup)view;for(int i=0;i<g.getChildCount();i++)collectCards(g.getChildAt(i),out);}
     }
     private static void chooseDate(MainActivity activity,int year,int month,int day,int hour,int minute) {
         click(activity,"Выбрать дату и время");

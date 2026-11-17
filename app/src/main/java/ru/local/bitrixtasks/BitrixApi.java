@@ -44,7 +44,7 @@ final class BitrixApi {
         if (tab == 0) filter.put("!REAL_STATUS", 5);
         if (tab == 1) filter.put("REAL_STATUS", 5);
         JSONObject params = new JSONObject().put("start", start).put("filter", filter)
-                .put("order", new JSONObject().put("ID", "desc"))
+                .put("order", new JSONObject().put("DEADLINE", "asc").put("ID", "desc"))
                 .put("select", new JSONArray(new String[]{"ID", "TITLE", "DESCRIPTION", "STATUS", "DEADLINE", "RESPONSIBLE_ID", "PRIORITY", "CHECKLIST"}));
         JSONObject response = transport.call("tasks.task.list", params);
         JSONArray array = response.getJSONObject("result").getJSONArray("tasks");

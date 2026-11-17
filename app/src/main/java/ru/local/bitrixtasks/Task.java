@@ -52,6 +52,10 @@ final class Task {
         try { JSONArray items=new JSONArray();for(ChecklistItem item:checklist)items.put(new JSONObject().put("id",item.id).put("title",item.title).put("isComplete",item.complete)); return new JSONObject().put("id",id).put("title",title).put("description",description).put("responsibleId",responsibleId).put("status",status).put("deadline",deadline).put("priority",highPriority?2:1).put("responsible",new JSONObject().put("name",responsibleName)).put("checklist",items); }
         catch(Exception e) { return new JSONObject(); }
     }
+    java.time.Instant deadlineInstant() {
+        if (deadline.isEmpty()) return null;
+        try { return OffsetDateTime.parse(deadline).toInstant(); } catch (Exception e) { return null; }
+    }
     boolean overdue() {
         if (status == 5 || status == 4 || deadline.isEmpty()) return false;
         try { return OffsetDateTime.parse(deadline).toInstant().isBefore(java.time.Instant.now()); }

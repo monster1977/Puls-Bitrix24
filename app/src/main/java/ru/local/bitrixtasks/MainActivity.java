@@ -236,18 +236,19 @@ public final class MainActivity extends Activity {
     private void load(boolean more) {
         if(m.busy)return;
         final int start=more?m.next:0, tab=m.tab; final String query=m.query; final boolean mine=m.mine;
-        if(!more && !m.demo) { m.tasks=local.tasks(); m.ready=!m.tasks.isEmpty(); m.next=-1; render(); }
+        if(!more && !m.demo) { m.tasks=local.tasks(); sortTasks(m.tasks); m.ready=!m.tasks.isEmpty(); m.next=-1; render(); }
         else if(!more) { m.tasks=new ArrayList<>(); m.ready=false; m.next=-1; }
         if(m.demo) {
             List<Task> visible=new ArrayList<>();
             for(Task t:m.demoTasks) if((tab==2 || (tab==1 ? t.status==5 : t.status!=5))
                     && (!mine || t.responsibleId==1) && t.title.toLowerCase(new Locale("ru")).contains(query.toLowerCase(new Locale("ru")))) visible.add(t);
-            m.tasks=visible; m.ready=true; m.next=-1; m.error=""; render(); return;
+            sortTasks(visible); m.tasks=visible; m.ready=true; m.next=-1; m.error=""; render(); return;
         }
         final BitrixApi api=m.api; final long user=m.hook.userId;
         m.run(()->{ syncPending(api); return api.list(start,query,tab,mine,user); },page->{
             if(more) { Set<Long> ids=new HashSet<>(); for(Task t:m.tasks)ids.add(t.id); for(Task t:page.tasks)if(ids.add(t.id))m.tasks.add(t); }
             else m.tasks=page.tasks;
+            sortTasks(m.tasks);
             m.next=page.next; m.ready=true; for(Task t:page.tasks)local.upsert(t); m.notice="";
         });
     }
@@ -424,6 +425,15 @@ public final class MainActivity extends Activity {
                 && (!m.mine || task.responsibleId==(m.demo?1:m.hook.userId))
                 && task.title.toLowerCase(Locale.ROOT).contains(m.query.toLowerCase(Locale.ROOT));
         if(!visible)m.tasks.removeIf(t->t.id==task.id);
+        sortTasks(m.tasks);
+    }
+    private static void sortTasks(List<Task> tasks) {
+        tasks.sort((a,b)->{ // nearest deadline first, tasks without a deadline last; newest ID first when deadlines match
+            java.time.Instant ia=a.deadlineInstant(), ib=b.deadlineInstant();
+            if(ia==null&&ib==null) return Long.compare(b.id,a.id);
+            if(ia==null) return 1; if(ib==null) return -1;
+            int byDate=ia.compareTo(ib); return byDate!=0?byDate:Long.compare(b.id,a.id);
+        });
     }
     private void openPortal(Task t) {
         String address="https://"+m.hook.host+"/company/personal/user/"+t.responsibleId+"/tasks/task/view/"+t.id+"/";
@@ -487,6 +497,7 @@ public final class MainActivity extends Activity {
         if(!m.demo) local.upsert(task);
         m.selected=task;m.screen="detail";m.notice=m.demo?"Задача создана в деморежиме":(task.id<0?"Задача сохранена локально; синхронизация ожидает вебхук":"Задача создана в Bitrix24");
         if((!m.mine || task.responsibleId==(m.demo?1:m.hook.userId)) && m.tab!=1 && task.title.toLowerCase(Locale.ROOT).contains(m.query.toLowerCase(Locale.ROOT)))m.tasks.add(0,task);
+        sortTasks(m.tasks);
         clearDraft();
     }
     private void disconnect() {
